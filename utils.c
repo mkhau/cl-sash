@@ -6,6 +6,12 @@
  * Utility routines.
  */
 
+
+/*
+* Modified by Michael Khau
+* Adding arith (l.974) and arithString (l.1076)
+*/
+
 #include "sash.h"
 
 #include <sys/types.h>
@@ -14,7 +20,7 @@
 #include <utime.h>
 #include <stdlib.h>
 
-
+#define BUF_SIZE 256
 /*
  * A chunk of data.
  * Chunks contain data which is allocated as needed, but which is
@@ -770,24 +776,29 @@ makeArgs(const char * cmd, int * retArgc, const char *** retArgv)
 				continue;
 			}
 
+				/*
+				 * If the next sequence begins with $, it generally is
+				 * an environment variable, or an arithmetic 
+				 * sequence to analyze.
+				*/
 			if (ch == '$'){
-				char* resvarenv = malloc(sizeof(*resvarenv)*256);;
+				char* resvarenv = malloc(sizeof(char)*BUF_SIZE);;
 				int env = 0;
 				char* buf = cp;
-				while (ch != '\0' && !isBlank(ch)){
+				while (ch != '\0' && !isBlank(ch)){ // Get all the char of the var name
 					ch = *buf++;
 					env++;
 				}
-				char* varenv =  malloc(sizeof(*varenv)*256);
+				char* varenv =  malloc(sizeof(char)*BUF_SIZE);
 				if (env != 0){
 					strncpy(varenv, cp, env-1);
 					int test = strcmp("$",varenv);
-					if (test == 0){
+					if (test == 0){ // $$ case
 						sprintf(resvarenv, "%d", getpid());
 					} else {
-						if (strchr(varenv, '{') != NULL && strchr(varenv, '}') != NULL){
+						if (strchr(varenv, '{') != NULL && strchr(varenv, '}') != NULL){ // arithmetic case : ${expression}
 							*varenv++;
-							strncpy(resvarenv, varenv, strlen(varenv)-1);
+							strncpy(resvarenv, varenv, strlen(varenv)-1); // removing the { and }
 							argument = arith(resvarenv);
 							continue;
 						}
@@ -957,30 +968,34 @@ makeArgs(const char * cmd, int * retArgc, const char *** retArgv)
  	return TRUE;
 }
 
+/*
+* Evaluating the string src if it is a well-formed expression.
+*/
 char* arith(char* src){
-	char* buf1 = malloc(sizeof(char) * 256);
-	char* buf2 = malloc(sizeof(char) * 256);
-	char* op1 = malloc(sizeof(char) * 256);
-	char* op2 = malloc(sizeof(char) * 256);
-	char* res = malloc(sizeof(char) * 256);
+	char* buf1 = malloc(sizeof(char) * BUF_SIZE);
+	char* buf2 = malloc(sizeof(char) * BUF_SIZE);
+	char* op1 = malloc(sizeof(char) * BUF_SIZE);
+	char* op2 = malloc(sizeof(char) * BUF_SIZE);
+	char* res = malloc(sizeof(char) * BUF_SIZE);
 	long l1, l2;
 	res = strchr(src, '+');
 	if (res != NULL){
-		buf1 = strtok(src, "+");
+		buf1 = strtok(src, "+"); // getting the part before the +
 		*res++;
-		strcpy(buf2, res);
-		op1 = arith(buf1);
+		strcpy(buf2, res); // removing the +
+		op1 = arith(buf1); // Analyzing both parts
 		op2 = arith(buf2);		
-		if (strcmp(op1, "NaN") == 0 || strcmp(op2, "NaN") == 0){
+		if (strcmp(op1, "NaN") == 0 || strcmp(op2, "NaN") == 0){ // If there is an error
 			res = "NaN";
 			return res;
 		}
-		l1 = strtol(op1, NULL, 10);
+		l1 = strtol(op1, NULL, 10); // casting to long int format
 		l2 = strtol(op2, NULL, 10);
 //		printf("%ld + %ld\n", l1, l2);
-		sprintf(res, "%ld", l1+l2);
+		sprintf(res, "%ld", l1+l2); // casting the result into a char* format
 		return res;
 	}
+// Almost same thing with -, x, and /
 	res = strchr(src, '-');
 	if (res != NULL){
 		buf1 = strtok(src, "-");
@@ -998,6 +1013,7 @@ char* arith(char* src){
 		sprintf(res, "%ld", l1-l2);
 		return res;
 	}	
+// * is a wildcard pattern. Using x prevents wildcard errors.
 	res = strchr(src, 'x');
 	if (res != NULL){
 		buf1 = strtok(src, "x");
@@ -1025,6 +1041,7 @@ char* arith(char* src){
 		l1 = strtol(op1, NULL, 10);
 		l2 = strtol(op2, NULL, 10);		
 		if (strcmp(op1, "NaN") == 0 || strcmp(op2, "NaN") == 0 || l2 == 0){
+// divide by 0 case
 			res = "NaN";
 			return res;
 		}
@@ -1033,16 +1050,16 @@ char* arith(char* src){
 		return res;
 	}
 
-	if (*src == '$'){
+	if (*src == '$'){ // Doesn't work
 		res = getenv(src);
 		l1 = strtol(res, &buf1, 10);
-		if (strcmp(buf1, res) == 0){ // Pas de nombre trouvé
+		if (strcmp(buf1, res) == 0){ // No number found
 			res = "NaN";
 			return res;
 		}
 	} else {
 		l1 = strtol(src, &res, 10);
-		if (strcmp(src, res) == 0){ // Pas de nombre trouvé
+		if (strcmp(src, res) == 0){ // No number found
 			res = "NaN";
 			return res;
 		}
@@ -1051,18 +1068,23 @@ char* arith(char* src){
 	return res;
 }
 
+/*
+* Analyzing strings, comparing them and adding them.
+*/
+
 char* 
 arithString(char* src)
 {
-	char* res = malloc(sizeof(char) * 256);
+	char* res = malloc(sizeof(char) * BUF_SIZE);
 	if (*src != '"' || *(src + strlen(src) -1) != '"'){
 		res = "Guillemet manquant";
 		return res;
 	}
-	char* buf1 = malloc(sizeof(char) * 256);
-	char* buf2 = malloc(sizeof(char) * 256);
-	char* op1 = malloc(sizeof(char) * 256);
-	char* op2 = malloc(sizeof(char) * 256);
+	char* buf1 = malloc(sizeof(char) * BUF_SIZE);
+	char* buf2 = malloc(sizeof(char) * BUF_SIZE);
+	char* op1 = malloc(sizeof(char) * BUF_SIZE);
+	char* op2 = malloc(sizeof(char) * BUF_SIZE);
+// Same thing as above
 	res = strchr(src, '=');
 	if (res != NULL){
 		buf1 = strtok(src, "=");
@@ -1090,6 +1112,7 @@ arithString(char* src)
 			return res;
 		}
 
+// removing useless "
 		*op1++;
 		*op2++;
 		sprintf(res, "\"%s%s", strtok(op1, "\""), op2);

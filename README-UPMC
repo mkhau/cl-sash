@@ -1,3 +1,14 @@
+Michael KHAU 2701652
+
+Modifications effectuées : Fichiers utils.c, cmds.c
+Certes, l'évaluateur devait être dans un nouveau fichier séparé. Cependant, pour moi, sauf erreur de compréhension, l'évaluateur est l'ensemble des fonctions qui permettent de traiter les arguments, et je ne vois pas quel serait l'intérêt de recopier la quasi-intégralité d'utils.c juste pour ajouter les fonctions arith et arithString.
+C'est pourquoi ces deux fonctions sont simplement ajoutées au fichier utils.c
+
+Tests : lancer depuis un terminal ./sash
+Les exemples de tests effectués sont en dessous sous la forme suivante :
+> commande lancée
+résultat obtenu
+
 Notes :
 3) Il est possible que parfois, $HOME (ou autres) ne s'expanse pas bien pour cause apparemment de caractères cachés. Mais recommencer avec les mêmes arguments peut parfois donner les résultats attendus.
 
